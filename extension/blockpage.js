@@ -52,20 +52,38 @@ async function handleSubmit(e) {
   // Enviar solicitacao
   await sendMessage('ADD_REQUEST', { site: blockedSite, reason });
 
-  // Liberar acesso temporario (30 minutos)
-  await sendMessage('GRANT_TEMP_ACCESS', { site: blockedSite, duration: 30 });
-
-  // Buscar ultimo dominio do historico de rastreio e adicionar aos permitidos com wildcard
-  const history = await sendMessage('GET_BROWSING_HISTORY', {});
-  if (history && history.length > 0) {
-    const lastEntry = history[0]; // ja ordenado por timestamp decrescente
-    const lastDomain = lastEntry.domain.replace(/^\*\./, ''); // limpar possivel wildcard existente
-    const wildcardDomain = `*.${lastDomain}`;
-    await sendMessage('ADD_ALLOWED_SITE', {
-      domain: wildcardDomain,
-      reason: `Adicionado automaticamente apos solicitacao de liberacao`
-    });
+  // Extrair o dominio base do site bloqueado para criar wildcard
+  // Ex: "facebook.com" -> "*.facebook.com"
+  // Ex: "www.facebook.com" -> "*.facebook.com"
+  let baseDomain = blockedSite;
+  
+  // Remover protocolo se existir
+  baseDomain = baseDomain.replace(/^https?:\/\//, '');
+  
+  // Remover path se existir
+  baseDomain = baseDomain.split('/')[0];
+  
+  // Remover www. se existir para pegar o dominio base
+  baseDomain = baseDomain.replace(/^www\./, '');
+  
+  // Remover subdominio se houver mais de 2 partes (ex: mail.google.com -> google.com)
+  const parts = baseDomain.split('.');
+  if (parts.length > 2) {
+    // Manter apenas os ultimos 2 niveis (dominio.tld)
+    baseDomain = parts.slice(-2).join('.');
   }
+  
+  const wildcardDomain = `*.${baseDomain}`;
+
+  // Adicionar site com wildcard na lista de permitidos
+  // NOTA: Isso NAO desativa o modo "Bloquear Tudo" - apenas adiciona uma excecao
+  await sendMessage('ADD_ALLOWED_SITE', {
+    domain: wildcardDomain,
+    reason: `Solicitacao de liberacao: ${reason}`
+  });
+
+  // Liberar acesso temporario (30 minutos) - isso adiciona excecao ao blockAllMode sem desativa-lo
+  await sendMessage('GRANT_TEMP_ACCESS', { site: baseDomain, duration: 30 });
 
   // Mostrar mensagem de sucesso
   showSuccess();

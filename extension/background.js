@@ -514,9 +514,14 @@ async function importBackup(backup) {
 
 async function blockAll() {
   // Bloqueia todos os sites exceto os essenciais
-  const data = await chrome.storage.local.get([STORAGE_KEYS.CONFIG, STORAGE_KEYS.ALLOWED_SITES]);
+  const data = await chrome.storage.local.get([
+    STORAGE_KEYS.CONFIG, 
+    STORAGE_KEYS.ALLOWED_SITES,
+    STORAGE_KEYS.BLOCKED_SITES
+  ]);
   const config = data[STORAGE_KEYS.CONFIG];
   const allowedSites = data[STORAGE_KEYS.ALLOWED_SITES] || [];
+  const blockedSites = data[STORAGE_KEYS.BLOCKED_SITES] || [];
 
   config.blockAllMode = true;
   await chrome.storage.local.set({ [STORAGE_KEYS.CONFIG]: config });
@@ -529,11 +534,25 @@ async function blockAll() {
   // Dominios da lista de sites permitidos (sem o prefixo *.)
   const allowedDomains = allowedSites.map(s => s.domain.replace(/^\*\./, ''));
 
-  // Combinar todos os dominios excluidos
-  const excludedDomains = [...new Set([...quickLinkDomains, ...allowedDomains])];
+  // Dominios da lista de sites bloqueados (para verificar prioridade)
+  const blockedDomains = blockedSites.map(s => s.domain.replace(/^\*\./, ''));
 
-  // Adicionar regra que bloqueia tudo respeitando a lista de permitidos
+  // Filtrar dominios permitidos que NAO estao na lista de bloqueados
+  // (Sites Bloqueados tem prioridade sobre Sites Permitidos)
+  const filteredAllowedDomains = allowedDomains.filter(allowedDomain => {
+    return !blockedDomains.some(blockedDomain => {
+      return allowedDomain === blockedDomain || 
+             allowedDomain.endsWith('.' + blockedDomain) ||
+             blockedDomain.endsWith('.' + allowedDomain);
+    });
+  });
+
+  // Combinar todos os dominios excluidos (quickLinks + permitidos nao bloqueados)
+  const excludedDomains = [...new Set([...quickLinkDomains, ...filteredAllowedDomains])];
+
+  // Remover regra antiga se existir e adicionar nova
   await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [999999],
     addRules: [{
       id: 999999,
       priority: 100,
@@ -707,8 +726,14 @@ async function grantTemporaryAccess(site, durationMinutes = 30) {
 
 // Funcao para adicionar excecao no modo "Bloquear Tudo"
 async function addBlockAllException(site, expiresAt) {
-  const data = await chrome.storage.local.get([STORAGE_KEYS.CONFIG]);
+  const data = await chrome.storage.local.get([
+    STORAGE_KEYS.CONFIG, 
+    STORAGE_KEYS.ALLOWED_SITES,
+    STORAGE_KEYS.BLOCKED_SITES
+  ]);
   const config = data[STORAGE_KEYS.CONFIG] || {};
+  const allowedSites = data[STORAGE_KEYS.ALLOWED_SITES] || [];
+  const blockedSites = data[STORAGE_KEYS.BLOCKED_SITES] || [];
 
   // Pegar os dominios ja permitidos nos quickLinks
   const quickLinkDomains = (config.quickLinks || []).map(l => {
@@ -719,8 +744,24 @@ async function addBlockAllException(site, expiresAt) {
     }
   }).filter(Boolean);
 
-  // Adicionar o site temporariamente permitido
-  const excludedDomains = [...new Set([...quickLinkDomains, site])];
+  // Dominios da lista de sites permitidos (sem o prefixo *.)
+  const allowedDomains = allowedSites.map(s => s.domain.replace(/^\*\./, ''));
+
+  // Dominios da lista de sites bloqueados (para verificar prioridade)
+  const blockedDomains = blockedSites.map(s => s.domain.replace(/^\*\./, ''));
+
+  // Filtrar dominios permitidos que NAO estao na lista de bloqueados
+  // (Sites Bloqueados tem prioridade sobre Sites Permitidos)
+  const filteredAllowedDomains = allowedDomains.filter(allowedDomain => {
+    return !blockedDomains.some(blockedDomain => {
+      return allowedDomain === blockedDomain || 
+             allowedDomain.endsWith('.' + blockedDomain) ||
+             blockedDomain.endsWith('.' + allowedDomain);
+    });
+  });
+
+  // Combinar todos os dominios excluidos (quickLinks + permitidos nao bloqueados + site temporario)
+  const excludedDomains = [...new Set([...quickLinkDomains, ...filteredAllowedDomains, site])];
 
   // Atualizar a regra de bloqueio total com a nova excecao
   await chrome.declarativeNetRequest.updateDynamicRules({
@@ -744,13 +785,85 @@ async function addBlockAllException(site, expiresAt) {
 }
 
 async function revokeTemporaryAccess(site) {
-  const data = await chrome.storage.local.get([STORAGE_KEYS.ALLOWED_SITES]);
+  const data = await chrome.storage.local.get([STORAGE_KEYS.ALLOWED_SITES, STORAGE_KEYS.CONFIG]);
   const allowedSites = data[STORAGE_KEYS.ALLOWED_SITES] || [];
+  const config = data[STORAGE_KEYS.CONFIG] || {};
 
   const filtered = allowedSites.filter(s => !(s.domain === site && s.temporary));
   await chrome.storage.local.set({ [STORAGE_KEYS.ALLOWED_SITES]: filtered });
-  await updateBlockingRules();
+  
+  // Se o modo "Bloquear Tudo" esta ativo, atualizar excecoes mantendo o bloqueio
+  if (config.blockAllMode) {
+    await refreshBlockAllExceptions();
+  } else {
+    await updateBlockingRules();
+  }
+  
   await addLog('REVOKE_TEMP_ACCESS', { site });
+}
+
+// Funcao para atualizar as excecoes do modo "Bloquear Tudo" sem desativa-lo
+async function refreshBlockAllExceptions() {
+  const data = await chrome.storage.local.get([
+    STORAGE_KEYS.CONFIG, 
+    STORAGE_KEYS.ALLOWED_SITES,
+    STORAGE_KEYS.BLOCKED_SITES
+  ]);
+  const config = data[STORAGE_KEYS.CONFIG] || {};
+  const allowedSites = data[STORAGE_KEYS.ALLOWED_SITES] || [];
+  const blockedSites = data[STORAGE_KEYS.BLOCKED_SITES] || [];
+
+  // Se blockAllMode nao esta ativo, nao faz nada
+  if (!config.blockAllMode) {
+    return;
+  }
+
+  // Pegar os dominios ja permitidos nos quickLinks
+  const quickLinkDomains = (config.quickLinks || []).map(l => {
+    try {
+      return new URL(l.url).hostname;
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+
+  // Dominios da lista de sites permitidos (sem o prefixo *.)
+  const allowedDomains = allowedSites.map(s => s.domain.replace(/^\*\./, ''));
+
+  // Dominios da lista de sites bloqueados (para verificar prioridade)
+  const blockedDomains = blockedSites.map(s => s.domain.replace(/^\*\./, ''));
+
+  // Filtrar dominios permitidos que NAO estao na lista de bloqueados
+  const filteredAllowedDomains = allowedDomains.filter(allowedDomain => {
+    return !blockedDomains.some(blockedDomain => {
+      return allowedDomain === blockedDomain || 
+             allowedDomain.endsWith('.' + blockedDomain) ||
+             blockedDomain.endsWith('.' + allowedDomain);
+    });
+  });
+
+  // Combinar todos os dominios excluidos
+  const excludedDomains = [...new Set([...quickLinkDomains, ...filteredAllowedDomains])];
+
+  // Atualizar a regra de bloqueio total
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [999999],
+    addRules: [{
+      id: 999999,
+      priority: 100,
+      action: {
+        type: 'redirect',
+        redirect: {
+          extensionPath: '/blockpage.html?site=all&reason=Bloqueio%20total%20ativado'
+        }
+      },
+      condition: {
+        urlFilter: '*',
+        resourceTypes: ['main_frame'],
+        excludedRequestDomains: excludedDomains
+      }
+    }]
+  });
 }
 
 // ============================================
@@ -855,8 +968,9 @@ async function handleMessage(message) {
 
 // Verificar e limpar acessos temporarios expirados a cada minuto
 setInterval(async () => {
-  const data = await chrome.storage.local.get([STORAGE_KEYS.ALLOWED_SITES]);
+  const data = await chrome.storage.local.get([STORAGE_KEYS.ALLOWED_SITES, STORAGE_KEYS.CONFIG]);
   const allowedSites = data[STORAGE_KEYS.ALLOWED_SITES] || [];
+  const config = data[STORAGE_KEYS.CONFIG] || {};
   
   const now = new Date();
   const filtered = allowedSites.filter(site => {
@@ -866,7 +980,12 @@ setInterval(async () => {
 
   if (filtered.length !== allowedSites.length) {
     await chrome.storage.local.set({ [STORAGE_KEYS.ALLOWED_SITES]: filtered });
-    await updateBlockingRules();
+    // Se o modo "Bloquear Tudo" esta ativo, apenas atualizar excecoes
+    if (config.blockAllMode) {
+      await refreshBlockAllExceptions();
+    } else {
+      await updateBlockingRules();
+    }
   }
 }, 60000);
 
