@@ -166,9 +166,9 @@ async function updateBlockingRules() {
       });
     }
 
-    // Remover todas as regras dinamicas existentes
+    // Remover regras dinamicas existentes, EXCETO a regra 999999 (Bloquear Tudo)
     const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
-    const existingRuleIds = existingRules.map(rule => rule.id);
+    const existingRuleIds = existingRules.map(rule => rule.id).filter(id => id !== 999999);
 
     await chrome.declarativeNetRequest.updateDynamicRules({
       removeRuleIds: existingRuleIds,

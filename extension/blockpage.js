@@ -49,43 +49,30 @@ async function handleSubmit(e) {
     return;
   }
 
-  // Enviar solicitacao
+  // Extrair o dominio do site bloqueado
+  let domain = blockedSite;
+  domain = domain.replace(/^https?:\/\//, ''); // Remover protocolo
+  domain = domain.split('/')[0]; // Remover path
+  domain = domain.replace(/^www\./, ''); // Remover www
+  
+  // Pegar dominio base (ex: mail.google.com -> google.com)
+  const parts = domain.split('.');
+  if (parts.length > 2) {
+    domain = parts.slice(-2).join('.');
+  }
+
+  // Registrar solicitacao
   await sendMessage('ADD_REQUEST', { site: blockedSite, reason });
 
-  // Extrair o dominio base do site bloqueado para criar wildcard
-  // Ex: "facebook.com" -> "*.facebook.com"
-  // Ex: "www.facebook.com" -> "*.facebook.com"
-  let baseDomain = blockedSite;
-  
-  // Remover protocolo se existir
-  baseDomain = baseDomain.replace(/^https?:\/\//, '');
-  
-  // Remover path se existir
-  baseDomain = baseDomain.split('/')[0];
-  
-  // Remover www. se existir para pegar o dominio base
-  baseDomain = baseDomain.replace(/^www\./, '');
-  
-  // Remover subdominio se houver mais de 2 partes (ex: mail.google.com -> google.com)
-  const parts = baseDomain.split('.');
-  if (parts.length > 2) {
-    // Manter apenas os ultimos 2 niveis (dominio.tld)
-    baseDomain = parts.slice(-2).join('.');
-  }
-  
-  const wildcardDomain = `*.${baseDomain}`;
-
-  // Adicionar site com wildcard na lista de permitidos
-  // NOTA: Isso NAO desativa o modo "Bloquear Tudo" - apenas adiciona uma excecao
+  // Adicionar site na lista de permitidos com wildcard (*.dominio.com)
   await sendMessage('ADD_ALLOWED_SITE', {
-    domain: wildcardDomain,
-    reason: `Solicitacao de liberacao: ${reason}`
+    domain: `*.${domain}`,
+    reason: `Liberado via solicitacao: ${reason}`
   });
 
-  // Liberar acesso temporario (30 minutos) - isso adiciona excecao ao blockAllMode sem desativa-lo
-  await sendMessage('GRANT_TEMP_ACCESS', { site: baseDomain, duration: 30 });
+  // Liberar acesso temporario - NAO desativa o Bloquear Tudo, apenas adiciona excecao
+  await sendMessage('GRANT_TEMP_ACCESS', { site: domain, duration: 30 });
 
-  // Mostrar mensagem de sucesso
   showSuccess();
 }
 
