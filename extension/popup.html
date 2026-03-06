@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Site Blocker</title>
+  <link rel="stylesheet" href="styles/common.css">
+  <style>
+    body {
+      width: 360px;
+      min-height: 400px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    .popup-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    /* Header */
+    .popup-header {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      padding: var(--spacing-md);
+      border-bottom: 1px solid var(--border);
+      background-color: var(--surface);
+    }
+
+    .popup-header img {
+      width: 32px;
+      height: 32px;
+    }
+
+    .popup-header-info h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .popup-header-info p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Main Content */
+    .popup-content {
+      flex: 1;
+      padding: var(--spacing-md);
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    /* Quick Links Section */
+    .quick-links-section h3 {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: var(--spacing-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .quick-links {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+    }
+
+    .quick-link {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      padding: var(--spacing-sm) var(--spacing-md);
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      color: var(--text-primary);
+      transition: all var(--transition);
+    }
+
+    .quick-link:hover {
+      background-color: var(--primary-light);
+      border-color: var(--primary);
+      text-decoration: none;
+    }
+
+    .quick-link svg {
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+    }
+
+    .quick-link:hover svg {
+      color: var(--primary);
+    }
+
+    .quick-link span {
+      flex: 1;
+      font-size: 14px;
+    }
+
+    .quick-link .arrow {
+      color: var(--text-muted);
+    }
+
+    /* Stats Section */
+    .stats-section {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--spacing-sm);
+    }
+
+    .stat-card {
+      padding: var(--spacing-md);
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Admin Section */
+    .admin-section {
+      margin-top: auto;
+      padding-top: var(--spacing-md);
+      border-top: 1px solid var(--border);
+    }
+
+    /* Login Form */
+    .login-form {
+      display: none;
+      flex-direction: column;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md);
+      background-color: var(--surface);
+      border-radius: var(--radius-md);
+      animation: slideIn 0.2s ease;
+    }
+
+    .login-form.active {
+      display: flex;
+    }
+
+    .login-form h3 {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font-size: 14px;
+    }
+
+    .login-form h3 svg {
+      width: 20px;
+      height: 20px;
+      color: var(--primary);
+    }
+
+    .login-error {
+      display: none;
+      padding: var(--spacing-sm);
+      background-color: var(--danger-light);
+      color: var(--danger);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+    }
+
+    .login-error.active {
+      display: block;
+    }
+
+    /* Setup Password */
+    .setup-form {
+      display: none;
+      flex-direction: column;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md);
+      background-color: var(--warning-light);
+      border: 1px solid var(--warning);
+      border-radius: var(--radius-md);
+      animation: slideIn 0.2s ease;
+    }
+
+    .setup-form.active {
+      display: flex;
+    }
+
+    .setup-form h3 {
+      color: var(--warning-hover);
+      font-size: 14px;
+    }
+
+    .setup-form p {
+      font-size: 12px;
+      color: var(--warning-hover);
+    }
+
+    /* Footer */
+    .popup-footer {
+      padding: var(--spacing-sm) var(--spacing-md);
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Admin Panel View */
+    #admin-panel {
+      display: none;
+      height: 100%;
+    }
+
+    #admin-panel.active {
+      display: block;
+    }
+
+    #main-view.hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Main View -->
+    <div id="main-view">
+      <header class="popup-header">
+        <img src="icons/icon48.png" alt="Site Blocker">
+        <div class="popup-header-info">
+          <h1 id="company-name">Site Blocker</h1>
+          <p>Controle de Acesso Corporativo</p>
+        </div>
+      </header>
+
+      <main class="popup-content">
+        <!-- Quick Links -->
+        <section class="quick-links-section">
+          <h3>Links Rapidos</h3>
+          <div class="quick-links" id="quick-links">
+            <!-- Links serao carregados dinamicamente -->
+          </div>
+        </section>
+
+        <!-- Stats -->
+        <section class="stats-section">
+          <div class="stat-card">
+            <div class="stat-value" id="blocked-count">0</div>
+            <div class="stat-label">Sites Bloqueados</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="requests-count">0</div>
+            <div class="stat-label">Solicitacoes</div>
+          </div>
+        </section>
+
+        <!-- Admin Section -->
+        <section class="admin-section">
+          <button class="btn btn-secondary btn-full" id="admin-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            Area Administrativa
+          </button>
+
+          <!-- Login Form -->
+          <div class="login-form" id="login-form">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              Acesso Administrativo
+            </h3>
+            <div class="input-group">
+              <label for="admin-password">Senha</label>
+              <input type="password" class="input" id="admin-password" placeholder="Digite a senha de admin">
+            </div>
+            <div class="login-error" id="login-error">Senha incorreta</div>
+            <div class="flex gap-sm">
+              <button class="btn btn-secondary flex-1" id="cancel-login">Cancelar</button>
+              <button class="btn btn-primary flex-1" id="submit-login">Entrar</button>
+            </div>
+          </div>
+
+          <!-- Setup Password Form -->
+          <div class="setup-form" id="setup-form">
+            <h3>Configuracao Inicial</h3>
+            <p>Defina uma senha para acessar a area administrativa.</p>
+            <div class="input-group">
+              <label for="new-password">Nova Senha</label>
+              <input type="password" class="input" id="new-password" placeholder="Digite a nova senha">
+            </div>
+            <div class="input-group">
+              <label for="confirm-password">Confirmar Senha</label>
+              <input type="password" class="input" id="confirm-password" placeholder="Confirme a senha">
+            </div>
+            <div class="login-error" id="setup-error">As senhas nao conferem</div>
+            <button class="btn btn-warning btn-full" id="submit-setup">Definir Senha</button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="popup-footer">
+        Site Blocker v1.0.0 - Controle Corporativo
+      </footer>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="admin-panel">
+      <!-- Admin panel content will be injected here -->
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

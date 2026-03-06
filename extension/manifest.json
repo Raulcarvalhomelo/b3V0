@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "Site Blocker - Controle Corporativo",
+  "version": "1.0.0",
+  "description": "Sistema de bloqueio de sites para ambiente corporativo",
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback",
+    "storage",
+    "tabs",
+    "activeTab",
+    "management",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "default_rules",
+        "enabled": true,
+        "path": "rules/default_rules.json"
+      }
+    ]
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["blockpage.html", "styles/*", "icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

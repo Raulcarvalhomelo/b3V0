@@ -1,0 +1,21 @@
+{
+  "name": "site-blocker-server",
+  "version": "1.0.0",
+  "description": "Dashboard centralizado para gerenciamento de extensoes Site Blocker",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "db:init": "bun run src/database/init.ts",
+    "build:frontend": "cd frontend && bun run build"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/cors": "^2.8.17",
+    "typescript": "^5.3.3"
+  }
+}
