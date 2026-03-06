@@ -55,6 +55,18 @@ async function handleSubmit(e) {
   // Liberar acesso temporario (30 minutos)
   await sendMessage('GRANT_TEMP_ACCESS', { site: blockedSite, duration: 30 });
 
+  // Buscar ultimo dominio do historico de rastreio e adicionar aos permitidos com wildcard
+  const history = await sendMessage('GET_BROWSING_HISTORY', {});
+  if (history && history.length > 0) {
+    const lastEntry = history[0]; // ja ordenado por timestamp decrescente
+    const lastDomain = lastEntry.domain.replace(/^\*\./, ''); // limpar possivel wildcard existente
+    const wildcardDomain = `*.${lastDomain}`;
+    await sendMessage('ADD_ALLOWED_SITE', {
+      domain: wildcardDomain,
+      reason: `Adicionado automaticamente apos solicitacao de liberacao`
+    });
+  }
+
   // Mostrar mensagem de sucesso
   showSuccess();
 }

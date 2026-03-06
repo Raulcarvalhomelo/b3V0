@@ -514,13 +514,25 @@ async function importBackup(backup) {
 
 async function blockAll() {
   // Bloqueia todos os sites exceto os essenciais
-  const data = await chrome.storage.local.get([STORAGE_KEYS.CONFIG]);
+  const data = await chrome.storage.local.get([STORAGE_KEYS.CONFIG, STORAGE_KEYS.ALLOWED_SITES]);
   const config = data[STORAGE_KEYS.CONFIG];
-  
+  const allowedSites = data[STORAGE_KEYS.ALLOWED_SITES] || [];
+
   config.blockAllMode = true;
   await chrome.storage.local.set({ [STORAGE_KEYS.CONFIG]: config });
-  
-  // Adicionar regra que bloqueia tudo
+
+  // Dominios dos quickLinks
+  const quickLinkDomains = (config.quickLinks || []).map(l => {
+    try { return new URL(l.url).hostname; } catch { return null; }
+  }).filter(Boolean);
+
+  // Dominios da lista de sites permitidos (sem o prefixo *.)
+  const allowedDomains = allowedSites.map(s => s.domain.replace(/^\*\./, ''));
+
+  // Combinar todos os dominios excluidos
+  const excludedDomains = [...new Set([...quickLinkDomains, ...allowedDomains])];
+
+  // Adicionar regra que bloqueia tudo respeitando a lista de permitidos
   await chrome.declarativeNetRequest.updateDynamicRules({
     addRules: [{
       id: 999999,
@@ -534,7 +546,7 @@ async function blockAll() {
       condition: {
         urlFilter: '*',
         resourceTypes: ['main_frame'],
-        excludedRequestDomains: config.quickLinks.map(l => new URL(l.url).hostname)
+        excludedRequestDomains: excludedDomains
       }
     }]
   });
