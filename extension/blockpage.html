@@ -73,6 +73,29 @@
       margin-bottom: var(--spacing-xl);
     }
 
+    /* URL tentada */
+    .attempted-url-banner {
+      display: none;
+      padding: 8px 14px;
+      background-color: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      color: #94a3b8;
+      word-break: break-all;
+      text-align: left;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .attempted-url-banner strong {
+      color: #cbd5e1;
+      display: block;
+      margin-bottom: 2px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
     .block-card {
       background-color: white;
       border-radius: var(--radius-lg);
@@ -100,6 +123,39 @@
 
     .request-form textarea {
       min-height: 100px;
+    }
+
+    /* Mensagem de site explicitamente bloqueado */
+    .hard-blocked-message {
+      display: none;
+      padding: var(--spacing-md);
+      background-color: var(--danger-light);
+      border: 1px solid var(--danger);
+      border-radius: var(--radius-md);
+      text-align: center;
+    }
+
+    .hard-blocked-message.active {
+      display: block;
+    }
+
+    .hard-blocked-message svg {
+      width: 36px;
+      height: 36px;
+      color: var(--danger);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .hard-blocked-message h3 {
+      color: var(--danger);
+      margin-bottom: var(--spacing-xs);
+      font-size: 15px;
+    }
+
+    .hard-blocked-message p {
+      color: var(--danger-hover);
+      font-size: 13px;
+      margin: 0;
     }
 
     .success-message {
@@ -166,18 +222,24 @@
     <p class="block-site" id="blocked-site">-</p>
     <span class="block-reason" id="block-reason">Site nao permitido</span>
 
+    <!-- URL tentada (preenchido via JS) -->
+    <div class="attempted-url-banner" id="attempted-url-banner">
+      <strong>URL tentada</strong>
+      <span id="attempted-url-text"></span>
+    </div>
+
     <div class="block-card">
       <!-- Request Form -->
       <div id="request-form-container">
         <h2>Solicitar Liberacao</h2>
         <p>Se voce precisa acessar este site para trabalho, preencha o formulario abaixo.</p>
-        
+
         <form class="request-form" id="request-form">
           <div class="input-group">
             <label for="request-reason">Motivo da Solicitacao *</label>
-            <textarea 
-              class="input" 
-              id="request-reason" 
+            <textarea
+              class="input"
+              id="request-reason"
               placeholder="Explique porque voce precisa acessar este site..."
               required
             ></textarea>
@@ -191,6 +253,17 @@
             Solicitar Liberacao
           </button>
         </form>
+
+        <!-- Feedback: site explicitamente bloqueado -->
+        <div class="hard-blocked-message" id="hard-blocked-message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <h3>Liberacao nao permitida</h3>
+          <p>Este dominio esta na lista de bloqueados e nao pode ser liberado automaticamente. Contate o administrador de TI.</p>
+        </div>
       </div>
 
       <!-- Success Message -->

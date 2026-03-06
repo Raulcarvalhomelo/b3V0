@@ -2,11 +2,9 @@
 // SITE BLOCKER - POPUP SCRIPT
 // ============================================
 
-// Estado
 let isAdminLoggedIn = false;
 let currentConfig = null;
 
-// Elementos DOM
 const mainView = document.getElementById('main-view');
 const adminPanel = document.getElementById('admin-panel');
 const adminBtn = document.getElementById('admin-btn');
@@ -17,7 +15,6 @@ const quickLinksContainer = document.getElementById('quick-links');
 const blockedCount = document.getElementById('blocked-count');
 const requestsCount = document.getElementById('requests-count');
 
-// Inicializacao
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -32,7 +29,7 @@ async function init() {
 
 async function loadConfig() {
   currentConfig = await sendMessage('GET_CONFIG');
-  
+
   if (currentConfig) {
     companyName.textContent = currentConfig.companyName || 'Site Blocker';
     renderQuickLinks(currentConfig.quickLinks || []);
@@ -46,7 +43,7 @@ async function loadStats() {
   ]);
 
   blockedCount.textContent = blockedSites?.length || 0;
-  
+
   const pendingRequests = requests?.filter(r => r.status === 'pending') || [];
   requestsCount.textContent = pendingRequests.length;
 }
@@ -81,17 +78,14 @@ function renderQuickLinks(links) {
 // ============================================
 
 function setupEventListeners() {
-  // Botao Admin
   adminBtn.addEventListener('click', handleAdminClick);
 
-  // Login Form
   document.getElementById('cancel-login').addEventListener('click', hideLoginForm);
   document.getElementById('submit-login').addEventListener('click', handleLogin);
   document.getElementById('admin-password').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleLogin();
   });
 
-  // Setup Form
   document.getElementById('submit-setup').addEventListener('click', handleSetup);
   document.getElementById('confirm-password').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleSetup();
@@ -99,9 +93,8 @@ function setupEventListeners() {
 }
 
 async function handleAdminClick() {
-  // Verificar se precisa configurar senha
   const result = await sendMessage('VERIFY_PASSWORD', { password: '' });
-  
+
   if (result.needsSetup) {
     showSetupForm();
   } else {
@@ -132,14 +125,14 @@ function showSetupForm() {
 
 async function handleLogin() {
   const password = document.getElementById('admin-password').value;
-  
+
   if (!password) {
     showLoginError('Digite a senha');
     return;
   }
 
   const result = await sendMessage('VERIFY_PASSWORD', { password });
-  
+
   if (result.valid) {
     isAdminLoggedIn = true;
     hideLoginForm();
@@ -169,7 +162,7 @@ async function handleSetup() {
   }
 
   await sendMessage('SET_PASSWORD', { password: newPassword });
-  
+
   setupForm.classList.remove('active');
   isAdminLoggedIn = true;
   showAdminPanel();
@@ -242,32 +235,21 @@ async function renderAdminPanel() {
       </nav>
 
       <main class="admin-content">
-        <!-- Sites Tab -->
         <div class="tab-content active" id="tab-sites">
           ${renderSitesTab(blockedSites, allowedSites)}
         </div>
-
-        <!-- History Tab -->
         <div class="tab-content" id="tab-history">
           ${renderHistoryTab()}
         </div>
-
-        <!-- Users Tab -->
         <div class="tab-content" id="tab-users">
           ${renderUsersTab(users)}
         </div>
-
-        <!-- Requests Tab -->
         <div class="tab-content" id="tab-requests">
           ${renderRequestsTab(requests)}
         </div>
-
-        <!-- Logs Tab -->
         <div class="tab-content" id="tab-logs">
           ${renderLogsTab(logs)}
         </div>
-
-        <!-- Settings Tab -->
         <div class="tab-content" id="tab-settings">
           ${renderSettingsTab(config)}
         </div>
@@ -292,10 +274,7 @@ async function renderAdminPanel() {
     </div>
   `;
 
-  // Adicionar estilos do admin
   addAdminStyles();
-
-  // Setup event listeners do admin
   setupAdminEventListeners();
 }
 
@@ -388,7 +367,7 @@ function renderUsersTab(users) {
             <div class="list-item-content">
               <span class="list-item-title">${escapeHtml(user.name)}</span>
               <span class="list-item-subtitle">
-                ${escapeHtml(user.department || 'Sem departamento')} - 
+                ${escapeHtml(user.department || 'Sem departamento')} -
                 <span class="badge badge-${user.level === 'admin' ? 'danger' : user.level === 'manager' ? 'warning' : 'neutral'}">${user.level}</span>
               </span>
             </div>
@@ -460,18 +439,30 @@ function renderRequestsTab(requests) {
   `;
 }
 
+// ============================================
+// HISTORY TAB
+// ============================================
+
 function renderHistoryTab() {
   return `
     <div class="admin-section">
       <div class="section-header">
         <h3>Historico de Navegacao (ultimas 72h)</h3>
-        <div style="display: flex; gap: 8px;">
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
           <button class="btn btn-secondary btn-sm" id="refresh-history-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M23 4v6h-6M1 20v-6h6"/>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
             </svg>
             Atualizar
+          </button>
+          <button class="btn btn-secondary btn-sm" id="export-history-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Exportar CSV
           </button>
           <button class="btn btn-danger btn-sm" id="clear-history-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -482,11 +473,11 @@ function renderHistoryTab() {
           </button>
         </div>
       </div>
-      
+
       <div class="input-group mb-md">
         <input type="text" class="input" id="history-filter" placeholder="Filtrar por dominio...">
       </div>
-      
+
       <div id="history-list-container">
         <div class="text-center text-muted p-md">Carregando historico...</div>
       </div>
@@ -497,15 +488,13 @@ function renderHistoryTab() {
 async function loadHistoryList(filter = '') {
   const history = await sendMessage('GET_BROWSING_HISTORY', { domain: filter });
   const container = document.getElementById('history-list-container');
-  
+
   if (!container) return;
 
   // Agrupar por data
   const groupedByDate = {};
   history.forEach(entry => {
-    if (!groupedByDate[entry.date]) {
-      groupedByDate[entry.date] = [];
-    }
+    if (!groupedByDate[entry.date]) groupedByDate[entry.date] = [];
     groupedByDate[entry.date].push(entry);
   });
 
@@ -516,36 +505,41 @@ async function loadHistoryList(filter = '') {
 
   let html = '';
   for (const [date, entries] of Object.entries(groupedByDate)) {
-    // Contar dominios unicos
     const uniqueDomains = [...new Set(entries.map(e => e.domain))];
-    
+
     html += `
       <div class="mb-md">
         <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; padding: 4px 0; border-bottom: 1px solid var(--border);">
-          ${date} - ${entries.length} acessos (${uniqueDomains.length} sites)
+          ${date} &mdash; ${entries.length} acessos (${uniqueDomains.length} sites)
         </h4>
         <div class="table-container" style="max-height: 200px; overflow-y: auto;">
           <table style="font-size: 11px;">
             <thead>
               <tr>
-                <th style="width: 60px;">Hora</th>
-                <th>Site</th>
-                <th style="width: 80px;">Usuario</th>
+                <th style="width: 54px;">Hora</th>
+                <th>Site / URL</th>
+                <th style="width: 70px;">Usuario</th>
               </tr>
             </thead>
             <tbody>
               ${entries.slice(0, 50).map(entry => `
                 <tr>
-                  <td>${entry.time}</td>
-                  <td class="truncate" style="max-width: 180px;" title="${escapeHtml(entry.url)}">
-                    <a href="${escapeHtml(entry.url)}" target="_blank" style="color: var(--primary); text-decoration: none;">
+                  <td style="white-space:nowrap;">${entry.time}</td>
+                  <td>
+                    <a href="${escapeHtml(entry.url)}" target="_blank"
+                       style="color: var(--primary); text-decoration: none; font-weight: 500;">
                       ${escapeHtml(entry.domain)}
                     </a>
+                    <div style="font-size:10px; color: var(--text-muted); word-break:break-all; margin-top:1px;">
+                      ${escapeHtml(entry.url)}
+                    </div>
                   </td>
                   <td>${escapeHtml(entry.user || '-')}</td>
                 </tr>
               `).join('')}
-              ${entries.length > 50 ? `<tr><td colspan="3" class="text-center text-muted">... e mais ${entries.length - 50} registros</td></tr>` : ''}
+              ${entries.length > 50
+                ? `<tr><td colspan="3" class="text-center text-muted">... e mais ${entries.length - 50} registros</td></tr>`
+                : ''}
             </tbody>
           </table>
         </div>
@@ -555,6 +549,10 @@ async function loadHistoryList(filter = '') {
 
   container.innerHTML = html;
 }
+
+// ============================================
+// LOGS TAB
+// ============================================
 
 function renderLogsTab(logs) {
   const todayLogs = logs?.filter(log => {
@@ -601,11 +599,15 @@ function renderLogsTab(logs) {
   `;
 }
 
+// ============================================
+// SETTINGS TAB
+// ============================================
+
 function renderSettingsTab(config) {
   return `
     <div class="admin-section">
       <h3 class="mb-md">Configuracoes Gerais</h3>
-      
+
       <div class="input-group mb-md">
         <label for="company-name-input">Nome da Empresa</label>
         <input type="text" class="input" id="company-name-input" value="${escapeHtml(config?.companyName || '')}" placeholder="Nome da empresa">
@@ -680,7 +682,7 @@ function renderSettingsTab(config) {
 
 function addAdminStyles() {
   if (document.getElementById('admin-styles')) return;
-  
+
   const style = document.createElement('style');
   style.id = 'admin-styles';
   style.textContent = `
@@ -690,7 +692,6 @@ function addAdminStyles() {
       height: 100%;
       min-height: 500px;
     }
-
     .admin-header {
       display: flex;
       align-items: center;
@@ -699,45 +700,37 @@ function addAdminStyles() {
       border-bottom: 1px solid var(--border);
       background-color: var(--surface);
     }
-
     .admin-header h2 {
       flex: 1;
       font-size: 16px;
     }
-
     .admin-tabs {
       padding: 0 var(--spacing-md);
       overflow-x: auto;
       white-space: nowrap;
     }
-
     .admin-tabs .tab {
       font-size: 12px;
       padding: var(--spacing-sm) var(--spacing-sm);
     }
-
     .admin-content {
       flex: 1;
       padding: var(--spacing-md);
       overflow-y: auto;
     }
-
     .admin-section {
       margin-bottom: var(--spacing-md);
     }
-
     .section-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       margin-bottom: var(--spacing-sm);
     }
-
     .section-header h3 {
       font-size: 13px;
       color: var(--text-secondary);
     }
-
     .admin-footer {
       display: flex;
       gap: var(--spacing-sm);
@@ -745,7 +738,6 @@ function addAdminStyles() {
       border-top: 1px solid var(--border);
       background-color: var(--surface);
     }
-
     .admin-footer .btn {
       flex: 1;
     }
@@ -754,13 +746,9 @@ function addAdminStyles() {
 }
 
 function setupAdminEventListeners() {
-  // Back button
   document.getElementById('back-btn').addEventListener('click', hideAdminPanel);
-
-  // Refresh button
   document.getElementById('refresh-btn').addEventListener('click', renderAdminPanel);
 
-  // Tabs
   document.querySelectorAll('.admin-tabs .tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.admin-tabs .tab').forEach(t => t.classList.remove('active'));
@@ -770,7 +758,6 @@ function setupAdminEventListeners() {
     });
   });
 
-  // Block/Unblock All
   document.getElementById('block-all-btn').addEventListener('click', async () => {
     if (confirm('Tem certeza que deseja bloquear TODOS os sites?')) {
       await sendMessage('BLOCK_ALL');
@@ -785,27 +772,15 @@ function setupAdminEventListeners() {
     }
   });
 
-  // Sites management
   setupSitesListeners();
-
-  // Browsing history
   setupHistoryListeners();
-
-  // Users management
   setupUsersListeners();
-
-  // Requests management
   setupRequestsListeners();
-
-  // Logs export
   setupLogsListeners();
-
-  // Settings
   setupSettingsListeners();
 }
 
 function setupSitesListeners() {
-  // Add blocked site (supports multiple domains)
   document.getElementById('add-blocked-btn')?.addEventListener('click', () => {
     showModal('Adicionar Sites Bloqueados', `
       <div class="input-group mb-md">
@@ -820,14 +795,9 @@ function setupSitesListeners() {
     `, async () => {
       const domainsText = document.getElementById('blocked-domains').value.trim();
       const reason = document.getElementById('blocked-reason').value.trim();
-      
+
       if (domainsText) {
-        // Parsear dominios: separar por ; ou nova linha
-        const domains = domainsText
-          .split(/[;\n]/)
-          .map(d => d.trim())
-          .filter(d => d.length > 0);
-        
+        const domains = domainsText.split(/[;\n]/).map(d => d.trim()).filter(d => d.length > 0);
         for (const domain of domains) {
           await sendMessage('ADD_BLOCKED_SITE', { domain, reason, wildcard: true });
         }
@@ -837,7 +807,6 @@ function setupSitesListeners() {
     });
   });
 
-  // Add allowed site (supports multiple domains)
   document.getElementById('add-allowed-btn')?.addEventListener('click', () => {
     showModal('Adicionar Sites Permitidos', `
       <div class="input-group mb-md">
@@ -852,14 +821,9 @@ function setupSitesListeners() {
     `, async () => {
       const domainsText = document.getElementById('allowed-domains').value.trim();
       const reason = document.getElementById('allowed-reason').value.trim();
-      
+
       if (domainsText) {
-        // Parsear dominios: separar por ; ou nova linha
-        const domains = domainsText
-          .split(/[;\n]/)
-          .map(d => d.trim())
-          .filter(d => d.length > 0);
-        
+        const domains = domainsText.split(/[;\n]/).map(d => d.trim()).filter(d => d.length > 0);
         for (const domain of domains) {
           await sendMessage('ADD_ALLOWED_SITE', { domain, reason });
         }
@@ -869,7 +833,6 @@ function setupSitesListeners() {
     });
   });
 
-  // Remove blocked sites
   document.querySelectorAll('.remove-blocked').forEach(btn => {
     btn.addEventListener('click', async () => {
       const domain = btn.dataset.domain;
@@ -880,7 +843,6 @@ function setupSitesListeners() {
     });
   });
 
-  // Remove allowed sites
   document.querySelectorAll('.remove-allowed').forEach(btn => {
     btn.addEventListener('click', async () => {
       const domain = btn.dataset.domain;
@@ -893,7 +855,6 @@ function setupSitesListeners() {
 }
 
 function setupUsersListeners() {
-  // Add user
   document.getElementById('add-user-btn')?.addEventListener('click', () => {
     showModal('Adicionar Usuario', `
       <div class="input-group mb-md">
@@ -921,7 +882,7 @@ function setupUsersListeners() {
       const department = document.getElementById('user-department').value.trim();
       const level = document.getElementById('user-level').value;
       const windowsUser = document.getElementById('user-windows').value.trim();
-      
+
       if (name) {
         await sendMessage('ADD_USER', { name, department, level, windowsUser });
         hideModal();
@@ -930,7 +891,6 @@ function setupUsersListeners() {
     });
   });
 
-  // Delete user
   document.querySelectorAll('.delete-user').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (confirm('Tem certeza que deseja excluir este usuario?')) {
@@ -942,7 +902,6 @@ function setupUsersListeners() {
 }
 
 function setupRequestsListeners() {
-  // Approve request
   document.querySelectorAll('.approve-request').forEach(btn => {
     btn.addEventListener('click', async () => {
       await sendMessage('APPROVE_REQUEST', { requestId: btn.dataset.id, adminName: 'Admin' });
@@ -950,7 +909,6 @@ function setupRequestsListeners() {
     });
   });
 
-  // Reject request
   document.querySelectorAll('.reject-request').forEach(btn => {
     btn.addEventListener('click', async () => {
       await sendMessage('REJECT_REQUEST', { requestId: btn.dataset.id, adminName: 'Admin' });
@@ -968,13 +926,20 @@ function setupHistoryListeners() {
     });
   }
 
-  // Refresh button
+  // Atualizar
   document.getElementById('refresh-history-btn')?.addEventListener('click', () => {
     const filter = document.getElementById('history-filter')?.value || '';
     loadHistoryList(filter);
   });
 
-  // Clear history
+  // Exportar CSV
+  document.getElementById('export-history-btn')?.addEventListener('click', async () => {
+    const filter = document.getElementById('history-filter')?.value || '';
+    const history = await sendMessage('GET_BROWSING_HISTORY', { domain: filter });
+    exportHistoryToCSV(history);
+  });
+
+  // Limpar historico
   document.getElementById('clear-history-btn')?.addEventListener('click', async () => {
     if (confirm('Tem certeza que deseja limpar todo o historico de navegacao?')) {
       await sendMessage('CLEAR_BROWSING_HISTORY');
@@ -982,13 +947,11 @@ function setupHistoryListeners() {
     }
   });
 
-  // Filter input
+  // Filtro com debounce
   let filterTimeout;
   document.getElementById('history-filter')?.addEventListener('input', (e) => {
     clearTimeout(filterTimeout);
-    filterTimeout = setTimeout(() => {
-      loadHistoryList(e.target.value);
-    }, 300);
+    filterTimeout = setTimeout(() => loadHistoryList(e.target.value), 300);
   });
 }
 
@@ -1001,27 +964,22 @@ function setupLogsListeners() {
 }
 
 function setupSettingsListeners() {
-  // Save config
   document.getElementById('save-config-btn')?.addEventListener('click', async () => {
-    const companyName = document.getElementById('company-name-input').value.trim();
+    const companyNameVal = document.getElementById('company-name-input').value.trim();
     const vpsUrl = document.getElementById('vps-url-input').value.trim();
-    
-    // Collect quick links
+
     const quickLinks = [];
     document.querySelectorAll('.quick-link-item').forEach(item => {
       const name = item.querySelector('[data-field="name"]').value.trim();
       const url = item.querySelector('[data-field="url"]').value.trim();
-      if (name && url) {
-        quickLinks.push({ name, url });
-      }
+      if (name && url) quickLinks.push({ name, url });
     });
 
-    await sendMessage('UPDATE_CONFIG', { companyName, vpsUrl, quickLinks });
+    await sendMessage('UPDATE_CONFIG', { companyName: companyNameVal, vpsUrl, quickLinks });
     alert('Configuracoes salvas!');
     loadConfig();
   });
 
-  // Add quick link
   document.getElementById('add-quick-link-btn')?.addEventListener('click', () => {
     const container = document.getElementById('quick-links-config');
     const index = container.children.length;
@@ -1037,22 +995,18 @@ function setupSettingsListeners() {
       </button>
     `;
     container.appendChild(div);
-    
     div.querySelector('.remove-quick-link').addEventListener('click', () => div.remove());
   });
 
-  // Remove quick link listeners
   document.querySelectorAll('.remove-quick-link').forEach(btn => {
     btn.addEventListener('click', () => btn.closest('.quick-link-item').remove());
   });
 
-  // Export backup
   document.getElementById('export-backup-btn')?.addEventListener('click', async () => {
     const backup = await sendMessage('EXPORT_BACKUP');
     downloadFile('site-blocker-backup.json', JSON.stringify(backup, null, 2), 'application/json');
   });
 
-  // Import backup
   document.getElementById('import-backup-btn')?.addEventListener('click', () => {
     document.getElementById('backup-file-input').click();
   });
@@ -1077,7 +1031,6 @@ function setupSettingsListeners() {
     reader.readAsText(file);
   });
 
-  // Change password
   document.getElementById('change-password-btn')?.addEventListener('click', () => {
     showModal('Alterar Senha', `
       <div class="input-group mb-md">
@@ -1091,12 +1044,11 @@ function setupSettingsListeners() {
     `, async () => {
       const newPassword = document.getElementById('new-admin-password').value;
       const confirmPassword = document.getElementById('confirm-admin-password').value;
-      
+
       if (newPassword.length < 4) {
         alert('A senha deve ter pelo menos 4 caracteres');
         return;
       }
-      
       if (newPassword !== confirmPassword) {
         alert('As senhas nao conferem');
         return;
@@ -1125,9 +1077,7 @@ function showModal(title, content, onConfirm) {
             </svg>
           </button>
         </div>
-        <div class="modal-body">
-          ${content}
-        </div>
+        <div class="modal-body">${content}</div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="modal-cancel">Cancelar</button>
           <button class="btn btn-primary" id="modal-confirm">Confirmar</button>
@@ -1147,9 +1097,7 @@ function showModal(title, content, onConfirm) {
 
 function hideModal() {
   const overlay = document.getElementById('modal-overlay');
-  if (overlay) {
-    overlay.parentElement.remove();
-  }
+  if (overlay) overlay.parentElement.remove();
 }
 
 // ============================================
@@ -1177,6 +1125,42 @@ function downloadFile(filename, content, type) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Exporta o historico de navegacao como CSV.
+ * @param {Array} history - Entradas do historico (ordenadas por timestamp desc)
+ */
+function exportHistoryToCSV(history) {
+  if (!history || history.length === 0) {
+    alert('Nenhum registro para exportar.');
+    return;
+  }
+
+  const headers = ['Data', 'Hora', 'Usuario', 'Dominio', 'URL Completa'];
+  const rows = history.map(entry => [
+    entry.date,
+    entry.time,
+    entry.user || '-',
+    entry.domain,
+    entry.url
+  ]);
+
+  // Escapar campos com virgula ou aspas
+  const escapeCSV = (value) => {
+    const str = String(value ?? '');
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(escapeCSV).join(','))
+    .join('\n');
+
+  const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+  downloadFile(`historico_navegacao_${timestamp}.csv`, csvContent, 'text/csv;charset=utf-8;');
 }
 
 function generateLogsHTML(logs) {

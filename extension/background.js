@@ -16,7 +16,6 @@ const STORAGE_KEYS = {
   BROWSING_HISTORY: 'browsing_history'
 };
 
-// Constante para retencao do historico (72 horas)
 const HISTORY_RETENTION_HOURS = 72;
 
 // ============================================
@@ -30,7 +29,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 async function initializeExtension() {
-  // Configuracao inicial
   const defaultConfig = {
     adminPasswordHash: '',
     adminPasswordSalt: '',
@@ -67,7 +65,6 @@ async function initializeExtension() {
     [STORAGE_KEYS.BROWSING_HISTORY]: []
   });
 
-  // Aplicar regras de bloqueio iniciais
   await updateBlockingRules();
 }
 
@@ -89,7 +86,6 @@ async function updateBlockingRules() {
     const currentUser = data[STORAGE_KEYS.CURRENT_USER];
     const users = data[STORAGE_KEYS.USERS] || [];
 
-    // Pegar permissoes do usuario atual
     let userAllowedSites = [];
     let userBlockedSites = [];
 
@@ -101,19 +97,16 @@ async function updateBlockingRules() {
       }
     }
 
-    // Combinar sites permitidos
     const finalAllowed = [...new Set([...allowedSites.map(s => s.domain), ...userAllowedSites])];
 
-    // Criar regras de bloqueio
     const rules = [];
     let ruleId = RULE_START_ID;
 
-    // Primeiro: regras de permissao (prioridade maior)
+    // Regras de permissao (prioridade 2)
     for (const domain of finalAllowed) {
-      // Tratar wildcards: *.google.com -> permite todos os subdominios
       const cleanDomain = domain.replace(/^\*\./, '');
       const isWildcard = domain.startsWith('*.');
-      
+
       rules.push({
         id: ruleId++,
         priority: 2,
@@ -125,34 +118,36 @@ async function updateBlockingRules() {
       });
     }
 
-    // Depois: regras de bloqueio
+    // Regras de bloqueio
+    // Prioridade 1: bloqueio normal
+    // Prioridade 3: bloqueio explicito que sobrescreve permissao de dominio pai
+    //
+    // Logica: se um dominio esta na lista de bloqueados E e subdominio de algum
+    // dominio permitido, usa prioridade 3 para sobrescrever a regra de permissao
+    // (prioridade 2). Isso garante que *.google.com na lista de permitidos nao
+    // desbloqueie mail.google.com se ele estiver explicitamente bloqueado.
     const allBlocked = [...blockedSites, ...userBlockedSites.map(d => ({ domain: d, wildcard: true }))];
-    
+
     for (const site of allBlocked) {
-      // Tratar wildcards no dominio
       const cleanDomain = site.domain.replace(/^\*\./, '');
       const isWildcardDomain = site.domain.startsWith('*.');
-      
-      // Pular se estiver na lista de permitidos
-      const isAllowed = finalAllowed.some(allowed => {
-        const cleanAllowed = allowed.replace(/^\*\./, '');
-        // Verifica correspondencia exata ou de subdominios
-        return cleanDomain === cleanAllowed || 
-               cleanDomain.endsWith('.' + cleanAllowed) ||
-               cleanAllowed.endsWith('.' + cleanDomain) ||
-               (allowed.startsWith('*.') && cleanDomain.endsWith(cleanAllowed));
-      });
-      
-      if (isAllowed) {
-        continue;
-      }
 
-      // Usar formato correto para wildcard
+      // Verificar se este dominio bloqueado e subdominio de algum dominio permitido.
+      // Se sim, prioridade 3 sobrescreve a regra de permissao (prioridade 2).
+      const isSubdomainOfAllowed = finalAllowed.some(allowed => {
+        const cleanAllowed = allowed.replace(/^\*\./, '');
+        return (
+          cleanDomain.endsWith('.' + cleanAllowed) ||
+          cleanAllowed.endsWith('.' + cleanDomain)
+        );
+      });
+
+      const priority = isSubdomainOfAllowed ? 3 : 1;
       const urlFilter = (site.wildcard || isWildcardDomain) ? `||${cleanDomain}` : `|https://${site.domain}|`;
-      
+
       rules.push({
         id: ruleId++,
-        priority: 1,
+        priority: priority,
         action: {
           type: 'redirect',
           redirect: {
@@ -166,7 +161,6 @@ async function updateBlockingRules() {
       });
     }
 
-    // Remover todas as regras dinamicas existentes
     const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
     const existingRuleIds = existingRules.map(rule => rule.id);
 
@@ -203,14 +197,10 @@ async function addLog(action, details) {
 
   logs.push(newLog);
 
-  // Limpar logs antigos
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - LOG_RETENTION_DAYS);
-  
-  const filteredLogs = logs.filter(log => {
-    const logDate = new Date(log.timestamp);
-    return logDate >= cutoffDate;
-  });
+
+  const filteredLogs = logs.filter(log => new Date(log.timestamp) >= cutoffDate);
 
   await chrome.storage.local.set({ [STORAGE_KEYS.LOGS]: filteredLogs });
   return newLog;
@@ -234,15 +224,13 @@ async function addRequest(site, reason) {
     reason: reason,
     user: currentUser ? currentUser.name : 'Desconhecido',
     userId: currentUser ? currentUser.id : null,
-    status: 'pending', // pending, approved, rejected
+    status: 'pending',
     approvedAt: null,
     approvedBy: null
   };
 
   requests.push(newRequest);
   await chrome.storage.local.set({ [STORAGE_KEYS.REQUESTS]: requests });
-
-  // Registrar no log
   await addLog('REQUEST', { site, reason });
 
   return newRequest;
@@ -253,7 +241,7 @@ async function approveRequest(requestId, adminName) {
     STORAGE_KEYS.REQUESTS,
     STORAGE_KEYS.ALLOWED_SITES
   ]);
-  
+
   const requests = data[STORAGE_KEYS.REQUESTS] || [];
   const allowedSites = data[STORAGE_KEYS.ALLOWED_SITES] || [];
 
@@ -265,7 +253,6 @@ async function approveRequest(requestId, adminName) {
   request.approvedAt = new Date().toISOString();
   request.approvedBy = adminName;
 
-  // Adicionar site a lista de permitidos
   if (!allowedSites.some(s => s.domain === request.site)) {
     allowedSites.push({
       domain: request.site,
@@ -280,10 +267,7 @@ async function approveRequest(requestId, adminName) {
     [STORAGE_KEYS.ALLOWED_SITES]: allowedSites
   });
 
-  // Atualizar regras de bloqueio
   await updateBlockingRules();
-
-  // Registrar no log
   await addLog('APPROVE_REQUEST', { site: request.site, requestId });
 
   return request;
@@ -302,8 +286,6 @@ async function rejectRequest(requestId, adminName) {
   request.approvedBy = adminName;
 
   await chrome.storage.local.set({ [STORAGE_KEYS.REQUESTS]: requests });
-
-  // Registrar no log
   await addLog('REJECT_REQUEST', { site: request.site, requestId });
 
   return request;
@@ -317,17 +299,11 @@ async function addBlockedSite(domain, reason, wildcard = true) {
   const data = await chrome.storage.local.get([STORAGE_KEYS.BLOCKED_SITES]);
   const blockedSites = data[STORAGE_KEYS.BLOCKED_SITES] || [];
 
-  // Verificar se ja existe
   if (blockedSites.some(s => s.domain === domain)) {
     return { success: false, message: 'Site ja esta na lista de bloqueados' };
   }
 
-  blockedSites.push({
-    domain: domain,
-    wildcard: wildcard,
-    reason: reason,
-    addedAt: new Date().toISOString()
-  });
+  blockedSites.push({ domain, wildcard, reason, addedAt: new Date().toISOString() });
 
   await chrome.storage.local.set({ [STORAGE_KEYS.BLOCKED_SITES]: blockedSites });
   await updateBlockingRules();
@@ -356,11 +332,7 @@ async function addAllowedSite(domain, reason) {
     return { success: false, message: 'Site ja esta na lista de permitidos' };
   }
 
-  allowedSites.push({
-    domain: domain,
-    reason: reason,
-    addedAt: new Date().toISOString()
-  });
+  allowedSites.push({ domain, reason, addedAt: new Date().toISOString() });
 
   await chrome.storage.local.set({ [STORAGE_KEYS.ALLOWED_SITES]: allowedSites });
   await updateBlockingRules();
@@ -393,7 +365,7 @@ async function addUser(userData) {
     id: Date.now().toString(),
     name: userData.name,
     department: userData.department || '',
-    level: userData.level || 'user', // admin, manager, user
+    level: userData.level || 'user',
     windowsUser: userData.windowsUser || '',
     allowedSites: userData.allowedSites || [],
     blockedSites: userData.blockedSites || [],
@@ -428,7 +400,7 @@ async function deleteUser(userId) {
 
   const user = users.find(u => u.id === userId);
   const filtered = users.filter(u => u.id !== userId);
-  
+
   await chrome.storage.local.set({ [STORAGE_KEYS.USERS]: filtered });
   await addLog('DELETE_USER', { userId, name: user?.name });
 
@@ -469,10 +441,10 @@ async function verifyPassword(password) {
 
 async function setAdminPassword(password) {
   const { hash, salt } = await hashPassword(password);
-  
+
   const data = await chrome.storage.local.get([STORAGE_KEYS.CONFIG]);
   const config = data[STORAGE_KEYS.CONFIG];
-  
+
   config.adminPasswordHash = hash;
   config.adminPasswordSalt = salt;
   config.initialized = true;
@@ -513,14 +485,12 @@ async function importBackup(backup) {
 // ============================================
 
 async function blockAll() {
-  // Bloqueia todos os sites exceto os essenciais
   const data = await chrome.storage.local.get([STORAGE_KEYS.CONFIG]);
   const config = data[STORAGE_KEYS.CONFIG];
-  
+
   config.blockAllMode = true;
   await chrome.storage.local.set({ [STORAGE_KEYS.CONFIG]: config });
-  
-  // Adicionar regra que bloqueia tudo
+
   await chrome.declarativeNetRequest.updateDynamicRules({
     addRules: [{
       id: 999999,
@@ -546,11 +516,10 @@ async function blockAll() {
 async function unblockAll() {
   const data = await chrome.storage.local.get([STORAGE_KEYS.CONFIG]);
   const config = data[STORAGE_KEYS.CONFIG];
-  
+
   config.blockAllMode = false;
   await chrome.storage.local.set({ [STORAGE_KEYS.CONFIG]: config });
 
-  // Remover regra de bloqueio total
   await chrome.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: [999999]
   });
@@ -567,8 +536,7 @@ async function trackBrowsingHistory(url, title = '') {
   try {
     const urlObj = new URL(url);
     const domain = urlObj.hostname;
-    
-    // Ignorar URLs internas da extensao
+
     if (url.startsWith('chrome-extension://') || url.startsWith('chrome://')) {
       return;
     }
@@ -591,14 +559,10 @@ async function trackBrowsingHistory(url, title = '') {
 
     history.push(newEntry);
 
-    // Limpar entradas antigas (mais de 72 horas)
     const cutoffDate = new Date();
     cutoffDate.setHours(cutoffDate.getHours() - HISTORY_RETENTION_HOURS);
-    
-    const filteredHistory = history.filter(entry => {
-      const entryDate = new Date(entry.timestamp);
-      return entryDate >= cutoffDate;
-    });
+
+    const filteredHistory = history.filter(entry => new Date(entry.timestamp) >= cutoffDate);
 
     await chrome.storage.local.set({ [STORAGE_KEYS.BROWSING_HISTORY]: filteredHistory });
     return newEntry;
@@ -611,7 +575,6 @@ async function getBrowsingHistory(filters = {}) {
   const data = await chrome.storage.local.get([STORAGE_KEYS.BROWSING_HISTORY]);
   let history = data[STORAGE_KEYS.BROWSING_HISTORY] || [];
 
-  // Aplicar filtros
   if (filters.domain) {
     history = history.filter(h => h.domain.includes(filters.domain));
   }
@@ -622,7 +585,6 @@ async function getBrowsingHistory(filters = {}) {
     history = history.filter(h => h.userId === filters.userId);
   }
 
-  // Ordenar por timestamp decrescente
   history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   return history;
@@ -634,15 +596,12 @@ async function clearBrowsingHistory() {
   return { success: true };
 }
 
-// Listener para rastrear navegacao
 chrome.webNavigation.onCompleted.addListener(async (details) => {
-  // Apenas frame principal
   if (details.frameId === 0) {
     try {
       const tab = await chrome.tabs.get(details.tabId);
       await trackBrowsingHistory(details.url, tab.title);
     } catch (error) {
-      // Tab pode ter sido fechada
       await trackBrowsingHistory(details.url, '');
     }
   }
@@ -653,19 +612,38 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
 // ============================================
 
 async function grantTemporaryAccess(site, durationMinutes = 30) {
-  const data = await chrome.storage.local.get([STORAGE_KEYS.ALLOWED_SITES, STORAGE_KEYS.CONFIG]);
+  const data = await chrome.storage.local.get([
+    STORAGE_KEYS.ALLOWED_SITES,
+    STORAGE_KEYS.BLOCKED_SITES,
+    STORAGE_KEYS.CONFIG
+  ]);
   const allowedSites = data[STORAGE_KEYS.ALLOWED_SITES] || [];
+  const blockedSitesList = data[STORAGE_KEYS.BLOCKED_SITES] || [];
   const config = data[STORAGE_KEYS.CONFIG] || {};
+
+  // Verificar se o dominio esta explicitamente na lista de bloqueados.
+  // Um dominio explicitamente bloqueado nao pode ser liberado via solicitacao
+  // automatica; apenas um administrador pode liberar manualmente.
+  const cleanSite = site.replace(/^\*\./, '');
+  const isExplicitlyBlocked = blockedSitesList.some(s => {
+    const cleanBlocked = s.domain.replace(/^\*\./, '');
+    return cleanSite === cleanBlocked || cleanSite.endsWith('.' + cleanBlocked);
+  });
+
+  if (isExplicitlyBlocked) {
+    return {
+      success: false,
+      blocked: true,
+      message: 'Site esta na lista de bloqueados e nao pode ser liberado temporariamente'
+    };
+  }
 
   const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString();
 
-  // Verificar se ja existe uma liberacao temporaria para esse site
   const existingIndex = allowedSites.findIndex(s => s.domain === site && s.temporary);
   if (existingIndex >= 0) {
-    // Atualizar expiracao
     allowedSites[existingIndex].expiresAt = expiresAt;
   } else {
-    // Adicionar nova liberacao temporaria
     allowedSites.push({
       domain: site,
       temporary: true,
@@ -676,7 +654,6 @@ async function grantTemporaryAccess(site, durationMinutes = 30) {
 
   await chrome.storage.local.set({ [STORAGE_KEYS.ALLOWED_SITES]: allowedSites });
 
-  // Se o modo "Bloquear Tudo" esta ativo, adicionar excecao especifica para esse site
   if (config.blockAllMode) {
     await addBlockAllException(site, expiresAt);
   } else {
@@ -685,7 +662,6 @@ async function grantTemporaryAccess(site, durationMinutes = 30) {
 
   await addLog('TEMP_ACCESS', { site, durationMinutes });
 
-  // Agendar remocao
   setTimeout(async () => {
     await revokeTemporaryAccess(site);
   }, durationMinutes * 60 * 1000);
@@ -693,24 +669,16 @@ async function grantTemporaryAccess(site, durationMinutes = 30) {
   return { success: true, expiresAt };
 }
 
-// Funcao para adicionar excecao no modo "Bloquear Tudo"
 async function addBlockAllException(site, expiresAt) {
   const data = await chrome.storage.local.get([STORAGE_KEYS.CONFIG]);
   const config = data[STORAGE_KEYS.CONFIG] || {};
 
-  // Pegar os dominios ja permitidos nos quickLinks
   const quickLinkDomains = (config.quickLinks || []).map(l => {
-    try {
-      return new URL(l.url).hostname;
-    } catch {
-      return null;
-    }
+    try { return new URL(l.url).hostname; } catch { return null; }
   }).filter(Boolean);
 
-  // Adicionar o site temporariamente permitido
   const excludedDomains = [...new Set([...quickLinkDomains, site])];
 
-  // Atualizar a regra de bloqueio total com a nova excecao
   await chrome.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: [999999],
     addRules: [{
@@ -747,20 +715,18 @@ async function revokeTemporaryAccess(site) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message).then(sendResponse);
-  return true; // Indica que a resposta sera assincrona
+  return true;
 });
 
 async function handleMessage(message) {
   const { action, payload } = message;
 
   switch (action) {
-    // Autenticacao
     case 'VERIFY_PASSWORD':
       return await verifyPassword(payload.password);
     case 'SET_PASSWORD':
       return await setAdminPassword(payload.password);
 
-    // Sites bloqueados/permitidos
     case 'GET_BLOCKED_SITES':
       return (await chrome.storage.local.get([STORAGE_KEYS.BLOCKED_SITES]))[STORAGE_KEYS.BLOCKED_SITES] || [];
     case 'GET_ALLOWED_SITES':
@@ -774,7 +740,6 @@ async function handleMessage(message) {
     case 'REMOVE_ALLOWED_SITE':
       return await removeAllowedSite(payload.domain);
 
-    // Usuarios
     case 'GET_USERS':
       return (await chrome.storage.local.get([STORAGE_KEYS.USERS]))[STORAGE_KEYS.USERS] || [];
     case 'ADD_USER':
@@ -784,13 +749,11 @@ async function handleMessage(message) {
     case 'DELETE_USER':
       return await deleteUser(payload.userId);
 
-    // Logs
     case 'GET_LOGS':
       return (await chrome.storage.local.get([STORAGE_KEYS.LOGS]))[STORAGE_KEYS.LOGS] || [];
     case 'ADD_LOG':
       return await addLog(payload.action, payload.details);
 
-    // Solicitacoes
     case 'GET_REQUESTS':
       return (await chrome.storage.local.get([STORAGE_KEYS.REQUESTS]))[STORAGE_KEYS.REQUESTS] || [];
     case 'ADD_REQUEST':
@@ -800,37 +763,32 @@ async function handleMessage(message) {
     case 'REJECT_REQUEST':
       return await rejectRequest(payload.requestId, payload.adminName);
 
-    // Configuracao
     case 'GET_CONFIG':
       return (await chrome.storage.local.get([STORAGE_KEYS.CONFIG]))[STORAGE_KEYS.CONFIG];
-    case 'UPDATE_CONFIG':
+    case 'UPDATE_CONFIG': {
       const currentConfig = (await chrome.storage.local.get([STORAGE_KEYS.CONFIG]))[STORAGE_KEYS.CONFIG];
       const newConfig = { ...currentConfig, ...payload };
       await chrome.storage.local.set({ [STORAGE_KEYS.CONFIG]: newConfig });
       return newConfig;
+    }
 
-    // Backup/Restore
     case 'EXPORT_BACKUP':
       return await exportBackup();
     case 'IMPORT_BACKUP':
       return await importBackup(payload);
 
-    // Acoes rapidas
     case 'BLOCK_ALL':
       return await blockAll();
     case 'UNBLOCK_ALL':
       return await unblockAll();
 
-    // Liberacao temporaria
     case 'GRANT_TEMP_ACCESS':
       return await grantTemporaryAccess(payload.site, payload.duration);
 
-    // Atualizar regras
     case 'UPDATE_RULES':
       await updateBlockingRules();
       return { success: true };
 
-    // Historico de navegacao
     case 'GET_BROWSING_HISTORY':
       return await getBrowsingHistory(payload || {});
     case 'CLEAR_BROWSING_HISTORY':
@@ -845,7 +803,7 @@ async function handleMessage(message) {
 setInterval(async () => {
   const data = await chrome.storage.local.get([STORAGE_KEYS.ALLOWED_SITES]);
   const allowedSites = data[STORAGE_KEYS.ALLOWED_SITES] || [];
-  
+
   const now = new Date();
   const filtered = allowedSites.filter(site => {
     if (!site.temporary || !site.expiresAt) return true;
